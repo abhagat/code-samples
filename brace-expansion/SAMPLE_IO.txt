@@ -1,0 +1,11 @@
+Enter Input:a{b,c}d
+abd acd
+
+Enter Input:a{b,{c,d}e,f}g
+abg aceg adeg afg
+
+Enter Input:a{b,c}d{e,f}
+abde abdf acde acdf
+
+Enter Input:Hey!\ {Thank\ You\ For\ Visiting,Have\ A\ Good\ Day}!
+Hey! Thank You For Visiting! Hey! Have A Good Day!
