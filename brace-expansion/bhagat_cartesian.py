@@ -1,29 +1,34 @@
+"""This program is designed to return the 'Cartesian Expansion' of a string -
+the same 'brace expansion' implemented by the bash shell. A string may be
+entered in bash in the following way:
+
+$prompt: echo a{b,c}
+ab ac
+
+Instructions:
+Upon running this program, the user will be asked for an input. On confirmation,
+the program will generate all possible output strings resulting from the
+expansion.
+After importing this file, clients may call 'cartesianProduct' on a string to
+generate the output as a list. 
+"""
+
 def cartesian():
-    """User-input processing function. If a user's input ends with a backslash,
-    according to the rules of bash, the prompt must wait for more input, unless
-    the backslash has been escaped. 
-    """
-    cumulative_s = ""
-    backslash_not_counted = True
-    while backslash_not_counted or backslash_count%2 == 1:
-        s = raw_input("Enter Input:")
-        backslash_count = 0
-        i = len(s) - 1
-        while s[i] == "\\" and i > -1:
-            backslash_count += 1
-            i -= 1
-        backslash_not_counted = False
-        cumulative_s = cumulative_s + s
-    cartesianProductPrinter(cumulative_s)
+    """Called by main to run program logic."""
+    cleaned_input = collect_cleaned_user_input()
+    output_list = cartesianProduct(cleaned_input)
+    print " ".join([i for i in output_list if i != ""])
 
 def cartesianProduct(string):
-    """The main "public" method for Cartesian expansion. Returns
-    the cartesian expansion of the input string, in the form of a
-    list of strings. Note that when text entered in bash is undergoing
+    """The main method for Cartesian expansion. Returns the
+    cartesian expansion of the input string, as a list of strings.
+
+    Note that when text entered in bash is undergoing
     Cartesian expansion, bash treats unescaped space characters as
     argument delimiters.
 
-    An IndexError is raised if the final character is an unescaped backslash. 
+    An UnescapedBackslashTerminatedStringException is raised if the final
+    character is an unescaped backslash. 
     """
     args = split_with_escaping(string, split_char=" ")
     output_list = []
@@ -39,26 +44,27 @@ def resolve_string(string):
     """
     #   Given any string undergoing Cartesian expansion, it is possible
     #   to split the string based on the content *before* a top level
-    #   nested brace pair, the content after, and the content in braces.
+    #   nested brace pair, the content after, and the content in braces:
     #
-    #   The code can then act recursively on these segments until it
+    #   left { middle } right
+    #
+    #   The code acts recursively on these segments until it
     #   reaches a base case. The base cases and some of the handling
     #   changes depending on whether the string had been captured in
-    #   braces. For this reason, separating resolve_string and resolve_braces,
-    #   while resulting in mild code repetition, helps to add mental
-    #   organization to the problem flow.
+    #   braces.
 
     brace_pair = outer_brace_finder(string)
     if len(brace_pair) == 0:
         return [unescape_string(string)]
-    obrace, cbrace = brace_pair[0], brace_pair[1]
     
+    obrace, cbrace = brace_pair[0], brace_pair[1]
     left = resolve_string(string[0:obrace])
     middle = resolve_braces(string[obrace+1:cbrace])
-    output_list = stringListDistribute(left,middle)
     right = resolve_string(string[cbrace+1:])
     
+    output_list = stringListDistribute(left,middle)
     output_list = stringListDistribute(output_list, right)
+    
     return output_list
 
 def resolve_braces(string):
@@ -70,6 +76,7 @@ def resolve_braces(string):
     """
     brace_pair = outer_brace_finder(string)
     output_list = []
+    # Base cases
     if len(brace_pair) == 0:
         comma_separated = split_with_escaping(string)
         if len(comma_separated) == 1:
@@ -78,76 +85,35 @@ def resolve_braces(string):
             for item in comma_separated:
                 output_list.append(unescape_string(item))
             return output_list
-    
+    # Partition the input
     obrace, cbrace = brace_pair[0], brace_pair[1]
     left = string[0:obrace]
     middle = string[obrace+1:cbrace]
     right = string[cbrace+1:]
-
-    # When a string is encapsulated in braces, top-level commas
-    # are significant.
-    # According to the "rules" of expansion, the last element
-    # in the left list gets distributed over the elements
-    # yielded from resolving the its adjacent brace pair.
     
+    # Deal with the left list first, while isolating its last element
     left_list = split_by_top_level_commas(left)
     rightmost_left = left_list.pop()
     for item in left_list:
         output_list.extend(resolve_string(item))
-
+        
+    # Mid list, and combine with preceding lists
     mid_list = \
         stringListDistribute(resolve_string(rightmost_left),
                              resolve_braces(middle))
-
+    
+    # Right list handling is reverse of left
     right_list = split_by_top_level_commas(right)
     leftmost_right = right_list.pop(0)
- 
-    # Similar to the last element in the left list above, the first
-    # element in the right list gets distributed. 
     mid_list = stringListDistribute(mid_list,
                                     resolve_string(leftmost_right))
     output_list.extend(mid_list)
     for item in right_list:
         output_list.extend(resolve_string(item))
-
-    return output_list
-    
-def split_by_top_level_commas(string):
-    """Returns a list of strings such that each element is as divided by
-    the top-level commas only. A string has top-level commas if it contains
-    a comma not enclosed in a valid pair of braces.
-
-    Example:
-    "a,b" returns ["a", "b"]
-    ",{a,b}" returns ["", "{a,b}"]
-    "ab{c,d}e,f" returns ["ab{c,d}e", "f"]
-    """
-    top_level_braces = top_level_brace_pairs(string)
-    if len(top_level_braces) == 0:
-        return split_with_escaping(string)
-    output_list = []
-    start_index = 0
-    temp_string = ""
-    
-    # Essentially, this block runs a split on strings on either
-    # side of braces, and makes sure to combine the last element
-    # of the left-side array with the first element of the right-side
-    # array, for each brace. 
-    for pair in top_level_braces:
-        s = split_with_escaping(string[start_index:pair[0]])
-        temp_string += s.pop(0)
-        if len(s) > 0:
-            output_list.append(temp_string)
-            temp_string = s.pop()
-            output_list.extend(s)
-        temp_string += string[pair[0]:pair[1]+1]
-        start_index = pair[1] + 1
         
-    s = split_with_escaping(string[start_index:])
-    temp_string += s.pop(0)
-    output_list.append(temp_string)
-    output_list.extend(s)
     return output_list
+
+### Methods Concerning Brace '{}' Detection ###
 
 def top_level_brace_pairs(string):
     """Returns a list of tuples containing indices of every top level brace
@@ -198,6 +164,8 @@ def outer_brace_finder(string):
     except IndexError:
         return []
 
+### Methods Concerning Character Escaping ###
+
 def unescape_string(string, escape_char='\\'):
     """Reformats a string's escaped characters and returns a string. In bash,
     characters following escape_char are added to the output and escape_char is
@@ -244,6 +212,45 @@ def split_with_escaping(string, split_char=',', escape_char='\\'):
     temp_str = "".join(temp_str_list)
     output_list.append(temp_str)
     return output_list
+
+class UnescapedBackslashTerminatedStringException(Exception):
+    def __init__(self, msg):
+        self.msg = msg
+
+### Other Helpers ###
+
+def split_by_top_level_commas(string):
+    """Returns a list of strings such that each element is as divided by
+    the top-level commas only. A string has top-level commas if it contains
+    a comma not enclosed in a valid pair of braces.
+
+    Example:
+    "a,b" returns ["a", "b"]
+    ",{a,b}" returns ["", "{a,b}"]
+    "ab{c,d}e,f" returns ["ab{c,d}e", "f"]
+    """
+    top_level_braces = top_level_brace_pairs(string)
+    if len(top_level_braces) == 0:
+        return split_with_escaping(string)
+    output_list = []
+    start_index = 0
+    temp_string = ""
+    
+    for pair in top_level_braces:
+        s = split_with_escaping(string[start_index:pair[0]])
+        temp_string += s.pop(0)
+        if len(s) > 0:
+            output_list.append(temp_string)
+            temp_string = s.pop()
+            output_list.extend(s)
+        temp_string += string[pair[0]:pair[1]+1]
+        start_index = pair[1] + 1
+        
+    s = split_with_escaping(string[start_index:])
+    temp_string += s.pop(0)
+    output_list.append(temp_string)
+    output_list.extend(s)
+    return output_list
         
 def stringListDistribute(stringlist1, stringlist2):
     """Returns a list of strings such that each element represents
@@ -260,12 +267,22 @@ def stringListDistribute(stringlist1, stringlist2):
                 output_list.append(string1 + string2)
         return output_list
 
-def cartesianProductPrinter(string):
-    print " ".join([i for i in cartesianProduct(string) if i != ""])
-
-class UnescapedBackslashTerminatedStringException(Exception):
-    def __init__(self, msg):
-        self.msg = msg
+def collect_cleaned_user_input():
+    """User-input processing function. If a user's input ends with a backslash,
+    according to the rules of bash, the prompt must wait for more input, unless
+    the backslash has been escaped. 
+    """
+    cumulative_s = ""
+    backslash_not_counted = True
+    while backslash_not_counted or backslash_count%2 == 1:
+        s = raw_input("Enter Input:")
+        backslash_count = 0
+        i = len(s) - 1
+        while s[i] == "\\" and i > -1:
+            backslash_count += 1
+            i -= 1
+        backslash_not_counted = False
+        cumulative_s = cumulative_s + s
     
 if __name__ == "__main__":
     cartesian()
