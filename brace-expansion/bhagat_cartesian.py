@@ -283,6 +283,7 @@ def collect_cleaned_user_input():
             i -= 1
         backslash_not_counted = False
         cumulative_s = cumulative_s + s
+    return cumulative_s
     
 if __name__ == "__main__":
     cartesian()
